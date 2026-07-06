@@ -1,0 +1,22 @@
+# Theos 编译产物
+obj/
+packages/
+.layout
+theos/
+
+# macOS
+.DS_Store
+
+# Xcode
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+
+# 编译产物
+*.deb
+*.dylib
+*.so
+
+# 临时文件
+*.tmp
+*.log
