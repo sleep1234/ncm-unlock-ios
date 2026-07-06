@@ -1,0 +1,59 @@
+name: Build NCM Unlock iOS
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Theos
+      run: |
+        bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
+        echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+    
+    - name: Build package
+      run: |
+        export THEOS=$HOME/theos
+        export PATH=$THEOS/bin:$PATH
+        make clean
+        make package FINALPACKAGE=1
+    
+    - name: Upload deb artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ncm-unlock-ios-deb
+        path: packages/*.deb
+        retention-days: 30
+    
+    - name: Create Release
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: packages/*.deb
+        tag_name: v${{ github.run_number }}
+        name: NCM Unlock iOS v${{ github.run_number }}
+        body: |
+          ## NCM Unlock iOS
+          
+          解锁网易云音乐 VIP 歌曲
+          
+          ### 安装方法
+          1. 下载 `.deb` 文件
+          2. 使用 Filza 或 Sileo 安装
+          3. 重启网易云音乐
+          
+          ### 功能
+          - 解锁 VIP 歌曲播放
+          - 支持多种音质选择
+          - 稳定音源：网易云、Joox、Bilibili
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
