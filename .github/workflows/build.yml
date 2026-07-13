@@ -17,17 +17,55 @@ jobs:
     
     - name: Setup Theos
       run: |
-        bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
+        # 安装依赖
+        brew install ldid dpkg fakeroot
+        
+        # 克隆 Theos（带重试）
+        for i in 1 2 3; do
+          git clone --recursive https://github.com/theos/theos.git $HOME/theos && break
+          echo "Attempt $i failed, retrying..."
+          sleep 10
+        done
+        
+        # 设置环境变量
         echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+        echo "$HOME/theos/bin" >> $GITHUB_PATH
+    
+    - name: Install SDKs
+      run: |
+        export THEOS=$HOME/theos
+        cd $THEOS
+        
+        # 下载 SDK（带重试）
+        for i in 1 2 3; do
+          if [ ! -d "sdks/iPhoneOS16.5.sdk" ]; then
+            curl -L -o /tmp/sdk.zip "https://github.com/theos/sdks/archive/master.zip" || true
+            if [ -f /tmp/sdk.zip ]; then
+              unzip -q /tmp/sdk.zip -d sdks/ || true
+              mv sdks/sdks-master/*.sdk sdks/ 2>/dev/null || true
+              break
+            fi
+            echo "SDK download attempt $i failed, retrying..."
+            sleep 10
+          fi
+        done
     
     - name: Build package
       run: |
         export THEOS=$HOME/theos
         export PATH=$THEOS/bin:$PATH
-        make clean
+        
+        # 清理
+        make clean || true
+        
+        # 编译
         make package FINALPACKAGE=1
     
+    - name: List packages
+      run: ls -la packages/ || echo "No packages directory"
+    
     - name: Upload deb artifact
+      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: ncm-unlock-ios-deb
@@ -35,7 +73,7 @@ jobs:
         retention-days: 30
     
     - name: Create Release
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push' && success()
       uses: softprops/action-gh-release@v1
       with:
         files: packages/*.deb
@@ -53,7 +91,11 @@ jobs:
           
           ### 功能
           - 解锁 VIP 歌曲播放
-          - 支持多种音质选择
+          - 支持多种音质选择（128k/192k/320k/FLAC）
           - 稳定音源：网易云、Joox、Bilibili
+          - 在设置页面添加模块设置入口
+          
+          ### 署名
+          —— 毛利老王
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
