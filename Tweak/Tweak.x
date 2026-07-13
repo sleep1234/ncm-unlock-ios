@@ -1,6 +1,5 @@
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
-#import <objc/runtime.h>
 #import "NCMUnlockAPI.h"
 #import "SettingsHelper.h"
 
@@ -113,121 +112,6 @@ static void showToastMessage(NSString *message) {
 }
 
 %end
-
-// 使用 runtime 方式 hook 设置页面
-// 在 %ctor 中使用 method swizzling
-
-%hookf(void, UIApplication, sendAction:to:from:forEvent:, SEL action, id target, id sender, UIEvent *event) {
-    %orig;
-    
-    // 检查是否是设置页面
-    if ([target isKindOfClass:NSClassFromString(@"NCMSettingViewController")]) {
-        static BOOL added = NO;
-        if (!added) {
-            added = YES;
-            
-            UIViewController *settingVC = (UIViewController *)target;
-            UIView *selfView = settingVC.view;
-            
-            // 创建设置入口
-            UIView *entryView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, selfView.frame.size.width, 60)];
-            entryView.backgroundColor = [UIColor whiteColor];
-            entryView.tag = 10086;
-            
-            // 标题
-            UILabel *titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(16, 8, selfView.frame.size.width - 32, 24)];
-            titleLabel.text = @"NCM Unlock 设置";
-            titleLabel.font = [UIFont boldSystemFontOfSize:16];
-            titleLabel.textColor = [UIColor blackColor];
-            [entryView addSubview:titleLabel];
-            
-            // 副标题
-            UILabel *subtitleLabel = [[UILabel alloc] initWithFrame:CGRectMake(16, 32, selfView.frame.size.width - 32, 20)];
-            subtitleLabel.text = [NSString stringWithFormat:@"当前音质: %@", [SettingsHelper sharedInstance].qualityName];
-            subtitleLabel.font = [UIFont systemFontOfSize:13];
-            subtitleLabel.textColor = [UIColor grayColor];
-            subtitleLabel.tag = 10087;
-            [entryView addSubview:subtitleLabel];
-            
-            // 点击手势
-            UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:settingVC action:@selector(showNCMUnlockSettings)];
-            [entryView addGestureRecognizer:tap];
-            
-            // 添加到设置页面
-            UITableView *tableView = [settingVC valueForKey:@"tableView"];
-            if (tableView) {
-                UIView *headerView = tableView.tableHeaderView;
-                if (headerView) {
-                    CGRect frame = entryView.frame;
-                    frame.origin.y = headerView.frame.size.height;
-                    entryView.frame = frame;
-                    
-                    UIView *containerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, selfView.frame.size.width, headerView.frame.size.height + 60)];
-                    [containerView addSubview:headerView];
-                    [containerView addSubview:entryView];
-                    tableView.tableHeaderView = containerView;
-                }
-            }
-            
-            // 添加方法
-            class_addMethod([settingVC class], @selector(showNCMUnlockSettings), (IMP)showNCMUnlockSettingsIMP, "v@:");
-            class_addMethod([settingVC class], @selector(updateQualityLabel), (IMP)updateQualityLabelIMP, "v@:");
-        }
-    }
-}
-
-// 方法实现
-void showNCMUnlockSettingsIMP(id self, SEL _cmd) {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"NCM Unlock 设置" 
-                                                                   message:nil 
-                                                            preferredStyle:UIAlertControllerStyleActionSheet];
-    
-    // 音质选择
-    UIAlertAction *standard = [UIAlertAction actionWithTitle:@"标准 128kbps" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-        [SettingsHelper sharedInstance].audioQuality = NCMQualityStandard;
-        updateQualityLabelIMP(self, _cmd);
-    }];
-    
-    UIAlertAction *higher = [UIAlertAction actionWithTitle:@"较高 192kbps" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-        [SettingsHelper sharedInstance].audioQuality = NCMQualityHigher;
-        updateQualityLabelIMP(self, _cmd);
-    }];
-    
-    UIAlertAction *exhigh = [UIAlertAction actionWithTitle:@"极高 320kbps" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-        [SettingsHelper sharedInstance].audioQuality = NCMQualityExhigh;
-        updateQualityLabelIMP(self, _cmd);
-    }];
-    
-    UIAlertAction *lossless = [UIAlertAction actionWithTitle:@"无损 FLAC (最高可用)" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-        [SettingsHelper sharedInstance].audioQuality = NCMQualityLossless;
-        updateQualityLabelIMP(self, _cmd);
-    }];
-    
-    // Toast 开关
-    UIAlertAction *toastAction = [UIAlertAction actionWithTitle:[SettingsHelper sharedInstance].showToast ? @"✓ 显示替换提示" : @"显示替换提示" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-        [SettingsHelper sharedInstance].showToast = ![SettingsHelper sharedInstance].showToast;
-    }];
-    
-    // 取消
-    UIAlertAction *cancel = [UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil];
-    
-    [alert addAction:standard];
-    [alert addAction:higher];
-    [alert addAction:exhigh];
-    [alert addAction:lossless];
-    [alert addAction:toastAction];
-    [alert addAction:cancel];
-    
-    [(UIViewController *)self presentViewController:alert animated:YES completion:nil];
-}
-
-void updateQualityLabelIMP(id self, SEL _cmd) {
-    UIView *selfView = ((UIViewController *)self).view;
-    UILabel *label = [selfView viewWithTag:10087];
-    if (label) {
-        label.text = [NSString stringWithFormat:@"当前音质: %@", [SettingsHelper sharedInstance].qualityName];
-    }
-}
 
 // 初始化
 %ctor {
