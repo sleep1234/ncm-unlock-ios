@@ -18,7 +18,7 @@ jobs:
     - name: Setup Theos
       run: |
         # 安装依赖
-        brew install ldid dpkg fakeroot
+        brew install ldid dpkg
         
         # 克隆 Theos（带重试）
         for i in 1 2 3; do
