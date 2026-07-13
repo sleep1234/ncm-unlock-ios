@@ -121,4 +121,9 @@ static void showToastMessage(NSString *message) {
     
     // 初始化设置
     [SettingsHelper sharedInstance];
+    
+    // 测试 Toast - 延迟2秒显示
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        showToastMessage(@"[NCM-Unlock] 模块已加载");
+    });
 }
