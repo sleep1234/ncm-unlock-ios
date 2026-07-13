@@ -81,11 +81,9 @@ static NSString *const kNCMPackageName = @"com.netease.cloudmusic";
                             NSData *newData = [NSJSONSerialization dataWithJSONObject:jsonResponse options:0 error:nil];
                             
                             // 显示提示
-                            dispatch_async(dispatch_get_main_queue(), ^{
-                                if ([SettingsHelper sharedInstance].showToast) {
-                                    [self showToast:[NSString stringWithFormat:@"已替换为免费音源 (%@)", quality]];
-                                }
-                            });
+                            if ([SettingsHelper sharedInstance].showToast) {
+                                showToastMessage([NSString stringWithFormat:@"已替换为免费音源 (%@)", quality]);
+                            }
                             
                             if (completionHandler) {
                                 completionHandler(newData, response, nil);
@@ -113,18 +111,20 @@ static NSString *const kNCMPackageName = @"com.netease.cloudmusic";
 
 %end
 
-// Toast 显示方法
-%new
-- (void)showToast:(NSString *)message {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:nil 
-                                                                   message:message 
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    
-    [[UIApplication sharedApplication].keyWindow.rootViewController presentViewController:alert animated:YES completion:^{
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            [alert dismissViewControllerAnimated:YES completion:nil];
-        });
-    }];
+// Helper: 显示 Toast
+static void showToastMessage(NSString *message) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:nil 
+                                                                       message:message 
+                                                                preferredStyle:UIAlertControllerStyleAlert];
+        
+        UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+        [rootVC presentViewController:alert animated:YES completion:^{
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [alert dismissViewControllerAnimated:YES completion:nil];
+            });
+        }];
+    });
 }
 
 // Hook 设置页面，添加模块设置入口

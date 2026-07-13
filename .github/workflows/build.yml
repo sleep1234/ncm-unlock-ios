@@ -17,32 +17,17 @@ jobs:
     
     - name: Setup Theos
       run: |
-        # 安装依赖
-        brew install ldid dpkg fakeroot
-        
-        # 克隆 Theos
-        git clone --recursive https://github.com/theos/theos.git $HOME/theos
-        
-        # 设置环境变量
+        bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
         echo "THEOS=$HOME/theos" >> $GITHUB_ENV
-        echo "$HOME/theos/bin" >> $GITHUB_PATH
     
     - name: Build package
       run: |
         export THEOS=$HOME/theos
         export PATH=$THEOS/bin:$PATH
-        
-        # 清理
-        make clean || true
-        
-        # 编译
+        make clean
         make package FINALPACKAGE=1
     
-    - name: List packages
-      run: ls -la packages/ || echo "No packages directory"
-    
     - name: Upload deb artifact
-      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: ncm-unlock-ios-deb
@@ -50,7 +35,7 @@ jobs:
         retention-days: 30
     
     - name: Create Release
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push' && success()
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
       uses: softprops/action-gh-release@v1
       with:
         files: packages/*.deb
@@ -68,11 +53,7 @@ jobs:
           
           ### 功能
           - 解锁 VIP 歌曲播放
-          - 支持多种音质选择（128k/192k/320k/FLAC）
+          - 支持多种音质选择
           - 稳定音源：网易云、Joox、Bilibili
-          - 在设置页面添加模块设置入口
-          
-          ### 署名
-          —— 毛利老王
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
