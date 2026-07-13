@@ -33,9 +33,9 @@ static NSMutableDictionary *pendingSongRequests = [NSMutableDictionary new];
         NSLog(@"[NCM-Unlock] Request: %@", urlString);
     }
     
-    // 拦截 xeapi 歌曲请求
-    if ([urlString containsString:@"xeapi/song/enhance/player/url"] || 
-        [urlString containsString:@"eapi/song/enhance/player/url"]) {
+    // 拦截 eapi 歌曲请求
+    if ([urlString containsString:@"eapi/song/enhance/player/url"] || 
+        [urlString containsString:@"song/enhance/player/url/v1"]) {
         
         NSLog(@"[NCM-Unlock] Found song URL request: %@", urlString);
         showToastMessage(@"[NCM-Unlock] 拦截到歌曲URL请求");
