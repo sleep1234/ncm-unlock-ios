@@ -3,25 +3,21 @@
 #import "NCMUnlockAPI.h"
 #import "SettingsHelper.h"
 
-// Forward declarations
-@class NCMSettingViewController;
-
-// 前向声明静态函数
-static void showToastMessage(NSString *message);
-
-// 网易云音乐版本号
-static NSString *const kNCMPackageName = @"com.netease.cloudmusic";
-
-// Hook 网络请求管理器
-%hook NCMusicNetworkManager
-
-// 拦截所有网络请求
-- (void)sendRequest:(id)request completion:(void (^)(id response, NSError *error))completion {
-    // 调用原始方法
-    %orig;
+// Helper: 显示 Toast
+static void showToastMessage(NSString *message) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:nil 
+                                                                       message:message 
+                                                                preferredStyle:UIAlertControllerStyleAlert];
+        
+        UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+        [rootVC presentViewController:alert animated:YES completion:^{
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [alert dismissViewControllerAnimated:YES completion:nil];
+            });
+        }];
+    });
 }
-
-%end
 
 // Hook NSURLSession 拦截网络请求
 %hook NSURLSession
@@ -117,34 +113,12 @@ static NSString *const kNCMPackageName = @"com.netease.cloudmusic";
 
 %end
 
-// Helper: 显示 Toast
-static void showToastMessage(NSString *message) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:nil 
-                                                                       message:message 
-                                                                preferredStyle:UIAlertControllerStyleAlert];
-        
-        UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
-        [rootVC presentViewController:alert animated:YES completion:^{
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                [alert dismissViewControllerAnimated:YES completion:nil];
-            });
-        }];
-    });
-}
-
 // Hook 设置页面，添加模块设置入口
 %hook NCMSettingViewController
 
 - (void)viewDidLoad {
     %orig;
     
-    // 添加模块设置入口
-    [self addNCMUnlockSettingsEntry];
-}
-
-%new
-- (void)addNCMUnlockSettingsEntry {
     // 创建设置入口
     UIView *entryView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, 60)];
     entryView.backgroundColor = [UIColor whiteColor];
@@ -169,12 +143,11 @@ static void showToastMessage(NSString *message) {
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(showNCMUnlockSettings)];
     [entryView addGestureRecognizer:tap];
     
-    // 添加到设置页面底部
+    // 添加到设置页面
     UITableView *tableView = [self valueForKey:@"tableView"];
     if (tableView) {
         UIView *headerView = tableView.tableHeaderView;
         if (headerView) {
-            // 添加到 header 下面
             CGRect frame = entryView.frame;
             frame.origin.y = headerView.frame.size.height;
             entryView.frame = frame;
