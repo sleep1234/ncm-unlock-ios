@@ -19,74 +19,38 @@ static void showToastMessage(NSString *message) {
     });
 }
 
-// Hook NSURLSession - 拦截所有 dataTask 方法
+// 存储待处理的歌曲ID
+static NSMutableDictionary *pendingSongRequests = [NSMutableDictionary new];
+
+// Hook NSURLSession - 拦截所有请求
 %hook NSURLSession
 
-// 方法1: dataTaskWithRequest:
 - (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request completionHandler:(void (^)(NSData *, NSURLResponse *, NSError *))completionHandler {
     NSString *urlString = request.URL.absoluteString;
     
-    if ([urlString containsString:@"song/enhance/player/url"] || 
-        [urlString containsString:@"song/enhance/player/url/v1"] ||
-        [urlString containsString:@"eapi/song/enhance/player"]) {
+    // 记录所有网易云请求（调试用）
+    if ([urlString containsString:@"music.163.com"] || [urlString containsString:@"netease"]) {
+        NSLog(@"[NCM-Unlock] Request: %@", urlString);
+    }
+    
+    // 拦截 xeapi 歌曲请求
+    if ([urlString containsString:@"xeapi/song/enhance/player/url"] || 
+        [urlString containsString:@"eapi/song/enhance/player/url"]) {
         
-        NSLog(@"[NCM-Unlock] Found song request: %@", urlString);
-        showToastMessage([NSString stringWithFormat:@"[NCM-Unlock] 拦截到歌曲请求: %@", urlString.length > 30 ? [urlString substringToIndex:30] : urlString]);
+        NSLog(@"[NCM-Unlock] Found song URL request: %@", urlString);
+        showToastMessage(@"[NCM-Unlock] 拦截到歌曲URL请求");
         
         // 包装 completionHandler
         void (^newHandler)(NSData *, NSURLResponse *, NSError *) = ^(NSData *data, NSURLResponse *response, NSError *error) {
-            if (error || !data) {
-                if (completionHandler) completionHandler(data, response, error);
-                return;
+            if (completionHandler) {
+                completionHandler(data, response, error);
             }
             
-            NSError *jsonError;
-            NSMutableDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableContainers error:&jsonError];
-            
-            if (jsonError || !json) {
-                if (completionHandler) completionHandler(data, response, error);
-                return;
-            }
-            
-            NSLog(@"[NCM-Unlock] Response: %@", json);
-            
-            // 检查是否需要替换
-            NSArray *songs = json[@"data"];
-            if ([songs isKindOfClass:[NSArray class]] && songs.count > 0) {
-                NSMutableDictionary *song = [songs[0] mutableCopy];
-                NSNumber *code = song[@"code"];
-                NSString *url = song[@"url"];
-                
-                if ([code integerValue] != 200 || !url || url.length == 0) {
-                    NSLog(@"[NCM-Unlock] Song needs VIP, id=%@", song[@"id"]);
-                    showToastMessage([NSString stringWithFormat:@"[NCM-Unlock] 歌曲需要VIP, id=%@", song[@"id"]]);
-                    
-                    // 尝试获取免费URL
-                    NSString *songId = [NSString stringWithFormat:@"%@", song[@"id"]];
-                    [[NCMUnlockAPI sharedInstance] getSongUrl:songId completion:^(NSString *freeUrl, NSString *quality) {
-                        if (freeUrl) {
-                            song[@"url"] = freeUrl;
-                            song[@"code"] = @200;
-                            song[@"br"] = @320000;
-                            NSMutableArray *newSongs = [NSMutableArray arrayWithArray:songs];
-                            newSongs[0] = song;
-                            json[@"data"] = newSongs;
-                            NSData *newData = [NSJSONSerialization dataWithJSONObject:json options:0 error:nil];
-                            
-                            if ([SettingsHelper sharedInstance].showToast) {
-                                showToastMessage([NSString stringWithFormat:@"已替换为免费音源 (%@)", quality]);
-                            }
-                            
-                            if (completionHandler) completionHandler(newData, response, nil);
-                        } else {
-                            if (completionHandler) completionHandler(data, response, error);
-                        }
-                    }];
-                    return;
-                }
-            }
-            
-            if (completionHandler) completionHandler(data, response, error);
+            // 响应是加密的，我们需要在解密后处理
+            // 通过通知来触发后续处理
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                showToastMessage(@"[NCM-Unlock] 收到歌曲URL响应（加密）");
+            });
         };
         
         return %orig(request, newHandler);
@@ -95,77 +59,54 @@ static void showToastMessage(NSString *message) {
     return %orig;
 }
 
-// 方法2: dataTaskWithURL:
-- (NSURLSessionDataTask *)dataTaskWithURL:(NSURL *)url completionHandler:(void (^)(NSData *, NSURLResponse *, NSError *))completionHandler {
-    NSString *urlString = url.absoluteString;
+%end
+
+// Hook JSON 解析 - 监听解密后的数据
+%hook NSJSONSerialization
+
++ (id)JSONObjectWithData:(NSData *)data options:(NSJSONReadingOptions)opt error:(NSError **)error {
+    id result = %orig;
     
-    if ([urlString containsString:@"song/enhance/player/url"] || 
-        [urlString containsString:@"song/enhance/player/url/v1"] ||
-        [urlString containsString:@"eapi/song/enhance/player"]) {
+    // 检查是否是歌曲URL响应
+    if ([result isKindOfClass:[NSDictionary class]]) {
+        NSDictionary *dict = (NSDictionary *)result;
         
-        NSLog(@"[NCM-Unlock] Found song request via URL: %@", urlString);
-        showToastMessage([NSString stringWithFormat:@"[NCM-Unlock] 拦截到歌曲请求(URL): %@", urlString.length > 30 ? [urlString substringToIndex:30] : urlString]);
-        
-        // 包装 completionHandler
-        void (^newHandler)(NSData *, NSURLResponse *, NSError *) = ^(NSData *data, NSURLResponse *response, NSError *error) {
-            if (error || !data) {
-                if (completionHandler) completionHandler(data, response, error);
-                return;
-            }
-            
-            NSError *jsonError;
-            NSMutableDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableContainers error:&jsonError];
-            
-            if (jsonError || !json) {
-                if (completionHandler) completionHandler(data, response, error);
-                return;
-            }
-            
-            NSLog(@"[NCM-Unlock] Response: %@", json);
-            
-            // 检查是否需要替换
-            NSArray *songs = json[@"data"];
-            if ([songs isKindOfClass:[NSArray class]] && songs.count > 0) {
-                NSMutableDictionary *song = [songs[0] mutableCopy];
-                NSNumber *code = song[@"code"];
-                NSString *songUrl = song[@"url"];
-                
-                if ([code integerValue] != 200 || !songUrl || songUrl.length == 0) {
-                    NSLog(@"[NCM-Unlock] Song needs VIP, id=%@", song[@"id"]);
-                    showToastMessage([NSString stringWithFormat:@"[NCM-Unlock] 歌曲需要VIP, id=%@", song[@"id"]]);
+        // 检查是否包含歌曲URL相关字段
+        if (dict[@"data"] && [dict[@"data"] isKindOfClass:[NSArray class]]) {
+            NSArray *dataArray = dict[@"data"];
+            if (dataArray.count > 0) {
+                NSDictionary *firstItem = dataArray[0];
+                if (firstItem[@"url"] || firstItem[@"id"]) {
+                    NSLog(@"[NCM-Unlock] Found song data: %@", dict);
+                    showToastMessage([NSString stringWithFormat:@"[NCM-Unlock] 解析到歌曲数据: id=%@", firstItem[@"id"]]);
                     
-                    // 尝试获取免费URL
-                    NSString *songId = [NSString stringWithFormat:@"%@", song[@"id"]];
-                    [[NCMUnlockAPI sharedInstance] getSongUrl:songId completion:^(NSString *freeUrl, NSString *quality) {
-                        if (freeUrl) {
-                            song[@"url"] = freeUrl;
-                            song[@"code"] = @200;
-                            song[@"br"] = @320000;
-                            NSMutableArray *newSongs = [NSMutableArray arrayWithArray:songs];
-                            newSongs[0] = song;
-                            json[@"data"] = newSongs;
-                            NSData *newData = [NSJSONSerialization dataWithJSONObject:json options:0 error:nil];
-                            
-                            if ([SettingsHelper sharedInstance].showToast) {
-                                showToastMessage([NSString stringWithFormat:@"已替换为免费音源 (%@)", quality]);
+                    // 检查是否需要替换
+                    NSNumber *code = firstItem[@"code"];
+                    NSString *url = firstItem[@"url"];
+                    
+                    if ([code integerValue] != 200 || !url || url.length == 0) {
+                        showToastMessage(@"[NCM-Unlock] 歌曲需要VIP，尝试替换...");
+                        
+                        // 获取歌曲ID
+                        NSString *songId = [NSString stringWithFormat:@"%@", firstItem[@"id"]];
+                        
+                        // 使用解锁API获取免费URL
+                        [[NCMUnlockAPI sharedInstance] getSongUrl:songId completion:^(NSString *freeUrl, NSString *quality) {
+                            if (freeUrl) {
+                                showToastMessage([NSString stringWithFormat:@"[NCM-Unlock] 获取到免费URL: %@", quality]);
+                                // 注意：这里无法直接修改已返回的数据
+                                // 需要在更底层进行替换
+                            } else {
+                                showToastMessage(@"[NCM-Unlock] 未找到免费URL");
                             }
-                            
-                            if (completionHandler) completionHandler(newData, response, nil);
-                        } else {
-                            if (completionHandler) completionHandler(data, response, error);
-                        }
-                    }];
-                    return;
+                        }];
+                    }
                 }
             }
-            
-            if (completionHandler) completionHandler(data, response, error);
-        };
-        
-        return %orig(url, newHandler);
+        }
     }
     
-    return %orig;
+    return result;
 }
 
 %end
@@ -175,12 +116,8 @@ static void showToastMessage(NSString *message) {
     %init;
     
     NSLog(@"[NCM-Unlock] Module loaded successfully");
+    showToastMessage(@"[NCM-Unlock] 模块已加载");
     
     // 初始化设置
     [SettingsHelper sharedInstance];
-    
-    // 测试 Toast
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        showToastMessage(@"[NCM-Unlock] 模块已加载");
-    });
 }
