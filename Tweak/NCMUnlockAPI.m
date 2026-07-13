@@ -52,7 +52,6 @@ static NSDictionary *qualityMap;
 
 - (void)tryNeteaseSource:(NSString *)songId completion:(void (^)(NSString * _Nullable url, NSString * _Nullable quality))completion {
     // 使用网易云官方 API 获取歌曲 URL
-    NSString *qualityStr = qualityMap[@(_audioQuality)] ?: @"320k";
     
     // 构建请求 URL
     NSString *urlString = [NSString stringWithFormat:@"https://music.163.com/api/song/enhance/player/url?id=%@&ids=[%@]&br=%@", 
