@@ -3,6 +3,12 @@
 #import "NCMUnlockAPI.h"
 #import "SettingsHelper.h"
 
+// Forward declarations
+@class NCMSettingViewController;
+
+// 前向声明静态函数
+static void showToastMessage(NSString *message);
+
 // 网易云音乐版本号
 static NSString *const kNCMPackageName = @"com.netease.cloudmusic";
 
