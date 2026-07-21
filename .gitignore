@@ -1,0 +1,15 @@
+# Xcode / XcodeGen
+*.xcodeproj
+*.xcworkspace
+DerivedData/
+build/
+ExportOptions.plist
+
+# Secrets / signing
+*.p12
+*.mobileprovision
+cert.p12
+*.keychain
+
+# OS
+.DS_Store

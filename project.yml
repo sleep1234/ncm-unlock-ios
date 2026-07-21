@@ -1,0 +1,52 @@
+name: NCMUnlock
+options:
+  bundleIdPrefix: com.ncm.unlock
+  deploymentTarget:
+    iOS: "14.0"
+  createIntermediateGroups: true
+
+packages:
+  swift-nio:
+    url: https://github.com/apple/swift-nio.git
+    from: 2.65.0
+  swift-nio-ssl:
+    url: https://github.com/apple/swift-nio-ssl.git
+    from: 2.27.0
+
+targets:
+  # ---- NetworkExtension：透明隧道 + 本地 MITM 代理 ----
+  NCMUnlockTunnel:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: NCMUnlockTunnel
+    dependencies:
+      - package: swift-nio
+        product: NIO
+      - package: swift-nio-ssl
+        product: NIOSSL
+    settings:
+      base:
+        INFOPLIST_FILE: NCMUnlockTunnel/Info.plist
+        GENERATE_INFOPLIST_FILE: false
+        PRODUCT_BUNDLE_IDENTIFIER: com.ncm.unlock.tunnel
+        CODE_SIGN_ENTITLEMENTS: NCMUnlockTunnel/NCMUnlockTunnel.entitlements
+        SWIFT_VERSION: "5.9"
+        DEAD_CODE_STRIPPING: true
+
+  # ---- 主 App：启动/停止隧道 ----
+  NCMUnlock:
+    type: application
+    platform: iOS
+    sources:
+      - path: NCMUnlock
+    dependencies:
+      - target: NCMUnlockTunnel
+    settings:
+      base:
+        INFOPLIST_FILE: NCMUnlock/Info.plist
+        GENERATE_INFOPLIST_FILE: false
+        PRODUCT_BUNDLE_IDENTIFIER: com.ncm.unlock
+        CODE_SIGN_ENTITLEMENTS: NCMUnlock/NCMUnlock.entitlements
+        SWIFT_VERSION: "5.9"
+        DEAD_CODE_STRIPPING: true
