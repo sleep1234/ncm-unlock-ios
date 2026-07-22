@@ -64,6 +64,32 @@ jobs:
           echo "app=$APP" >> "$GITHUB_OUTPUT"
           echo "found: $APP"
 
+      - name: Embed entitlements (ad-hoc codesign)
+        run: |
+          set -o pipefail
+          APP="${{ steps.locate.outputs.app }}"
+          # 1) 找到内嵌的 tunnel 扩展(嵌套代码必须先签)
+          APPEX=$(find "$APP" -name "*.appex" | head -1)
+          if [ -z "$APPEX" ]; then
+            echo "::error::NCMUnlockTunnel.appex not found inside $APP"
+            exit 1
+          fi
+          echo "--- codesign appex: $APPEX ---"
+          cp NCMUnlockTunnel/NCMUnlockTunnel.entitlements /tmp/tunnel.entitlements
+          # --deep 覆盖内嵌的 swift-nio framework；--entitlements 注入网络扩展权限
+          codesign --force --deep --sign - --entitlements /tmp/tunnel.entitlements "$APPEX"
+
+          echo "--- codesign app: $APP ---"
+          cp NCMUnlock/NCMUnlock.entitlements /tmp/app.entitlements
+          codesign --force --deep --sign - --entitlements /tmp/app.entitlements "$APP"
+
+          # 2) 验证 entitlements 已注入(也作为构建自校验)
+          echo "=== app entitlements ==="
+          codesign -d --entitlements - "$APP" 2>/dev/null | grep -E "networkextension|application-groups" || { echo "::error::app 缺少 network extension entitlement"; exit 1; }
+          echo "=== appex entitlements ==="
+          codesign -d --entitlements - "$APPEX" 2>/dev/null | grep -E "networkextension|application-groups" || { echo "::error::appex 缺少 network extension entitlement"; exit 1; }
+          echo "ENTITLEMENTS_EMBEDDED_OK"
+
       - name: Package unsigned IPA
         run: |
           rm -rf Payload NCMUnlock.ipa
