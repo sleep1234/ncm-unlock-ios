@@ -56,13 +56,14 @@ enum EapiCrypto {
         let op: CCOperation = encrypt ? CCOperation(kCCEncrypt) : CCOperation(kCCDecrypt)
         let alg: CCAlgorithm = CCAlgorithm(kCCAlgorithmAES128)
         let opt: CCOptions = CCOptions(kCCOptionECBMode) | CCOptions(kCCOptionPKCS7Padding)
-        let status = padded.withUnsafeBytes { inBuf in
-            out.withUnsafeMutableBytes { outBuf in
+        let capacity = out.count
+        let status = out.withUnsafeMutableBytes { outBuf in
+            padded.withUnsafeBytes { inBuf in
                 CCCrypt(op, alg, opt,
                         (keyData as NSData).bytes, kCCKeySizeAES128,
                         nil,
                         inBuf.baseAddress, padded.count,
-                        outBuf.baseAddress, out.count, &outLen)
+                        outBuf.baseAddress, capacity, &outLen)
             }
         }
         guard status == kCCSuccess, outLen > 0 else { return nil }
