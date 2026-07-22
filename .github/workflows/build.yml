@@ -25,9 +25,12 @@ jobs:
       - name: Generate Xcode project
         run: |
           set -o pipefail
-          xcodegen generate --spec project.yml --project NCMUnlock.xcodeproj 2>&1 | tee build.log
+          # 注意：不要传 --project NCMUnlock.xcodeproj，否则 XcodeGen 会把它当目录
+          # 再叠加 name:NCMUnlock 生成嵌套的 NCMUnlock.xcodeproj/NCMUnlock.xcodeproj。
+          # 直接按 project.yml 里的 name 在当前目录生成即可。
+          xcodegen generate --spec project.yml 2>&1 | tee build.log
           echo "--- ls xcodeproj ---"
-          ls -la *.xcodeproj || echo "NO_XCODEPROJ_GENERATED"
+          ls -la NCMUnlock.xcodeproj || echo "NO_XCODEPROJ_GENERATED"
 
       # 免签构建：越狱机用 TrollStore 安装（TrollStore 会按内嵌 entitlements 重新签名）。
       # 若需 Apple 官方签名 IPA，请在仓库 Secrets 配置 P12/PROFILE/TEAM_ID 后改用 archive+export 流程。
