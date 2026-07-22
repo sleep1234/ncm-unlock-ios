@@ -82,11 +82,11 @@ class ViewController: UIViewController {
                 self.statusLabel.text = "状态：断开中…"
             case .disconnected:
                 self.toggle.isOn = false
-                if let err = conn.error {
-                    self.statusLabel.text = "状态：未连接（\(err.localizedDescription)）"
-                } else {
-                    self.statusLabel.text = "状态：未连接"
+                var text = "状态：未连接"
+                if #available(iOS 16.0, *), let err = conn.error {
+                    text += "（\(err.localizedDescription)）"
                 }
+                self.statusLabel.text = text
             case .invalid:
                 self.toggle.isOn = false
                 self.statusLabel.text = "状态：未连接"
