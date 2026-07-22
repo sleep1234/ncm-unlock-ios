@@ -30,6 +30,7 @@ jobs:
       - name: Build (unsigned, for jailbreak / TrollStore)
         id: build
         run: |
+          set -o pipefail
           xcodebuild build \
             -scheme NCMUnlock \
             -configuration Release \
@@ -38,7 +39,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
-            2>&1 | tee build.log | xcpretty
+            2>&1 | tee build.log
 
       - name: Locate built .app
         id: locate
@@ -88,4 +89,4 @@ jobs:
             fi
           fi
           git commit --allow-empty -m "$MSG"
-          git push origin HEAD:refs/heads/ci-status
+          git push -f origin HEAD:refs/heads/ci-status
