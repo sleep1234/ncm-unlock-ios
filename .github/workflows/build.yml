@@ -5,6 +5,10 @@ on:
   push:
     branches: [ main, vpn ]
 
+# 允许本工作流把状态分支 push 回仓库（供外部轮询监测构建是否结束）
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-14
@@ -24,6 +28,7 @@ jobs:
       # 免签构建：越狱机用 TrollStore 安装（TrollStore 会按内嵌 entitlements 重新签名）。
       # 若需 Apple 官方签名 IPA，请在仓库 Secrets 配置 P12/PROFILE/TEAM_ID 后改用 archive+export 流程。
       - name: Build (unsigned, for jailbreak / TrollStore)
+        id: build
         run: |
           xcodebuild build \
             -scheme NCMUnlock \
@@ -60,3 +65,19 @@ jobs:
         with:
           name: NCMUnlock-unsigned.ipa
           path: NCMUnlock.ipa
+
+      # 构建结束（成功或失败）都往仓库 push 一个 ci-status 分支，
+      # 外部可通过 `git ls-remote` 轮询该分支的 sha 变化来判断“是否编译完成”及结果。
+      - name: Report status (git-visible)
+        if: always()
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd /tmp
+          rm -rf ncm-ci
+          git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/sleep1234/ncm-unlock-ios.git" ncm-ci
+          cd ncm-ci
+          git config user.email "ci@noreply.local"
+          git config user.name "ncm-ci"
+          git commit --allow-empty -m "ci: ${{ job.status }} run=${{ github.run_id }}"
+          git push origin HEAD:refs/heads/ci-status
