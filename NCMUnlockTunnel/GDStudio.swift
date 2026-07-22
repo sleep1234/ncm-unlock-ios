@@ -10,20 +10,20 @@ final class GDStudio {
 
     private init() {
         let cfg = URLSessionConfiguration.ephemeral
-        cfg.requestTimeoutInterval = 8
+        cfg.timeoutInterval = 8
         cfg.httpAdditionalHeaders = ["User-Agent": "Mozilla/5.0"]
         self.session = URLSession(configuration: cfg)
         cache.countLimit = 2000
     }
 
-    struct Result {
+    struct GDResult {
         let url: String
         let br: Int
         let size: Int
     }
 
     /// 返回可用播放地址；失败返回 nil。带缓存与 999 兜底。
-    func fetch(songId: Int, br: Int = DEFAULT_BR) -> Result? {
+    func fetch(songId: Int, br: Int = DEFAULT_BR) -> GDResult? {
         if let cached = cached(songId: songId, br: br) { return cached }
         for tryBr in [br, FALLBACK_BR] where tryBr != br || br == FALLBACK_BR {
             if let r = request(songId: songId, br: tryBr) {
@@ -35,7 +35,7 @@ final class GDStudio {
         return nil
     }
 
-    private func request(songId: Int, br: Int) -> Result? {
+    private func request(songId: Int, br: Int) -> GDResult? {
         var comps = URLComponents(string: GD_API_BASE)!
         comps.queryItems = [
             URLQueryItem(name: "types", value: "url"),
@@ -47,7 +47,7 @@ final class GDStudio {
         var req = URLRequest(url: url)
         req.httpMethod = "GET"
         let sem = DispatchSemaphore(value: 0)
-        var out: Result?
+        var out: GDResult?
         let task = session.dataTask(with: req) { data, resp, err in
             defer { sem.signal() }
             guard err == nil, let data = data,
@@ -57,19 +57,19 @@ final class GDStudio {
             guard let u = first["url"] as? String, u.hasPrefix("http") else { return }
             let gbr = (first["br"] as? Int) ?? 0
             let gsize = (first["size"] as? Int) ?? 0
-            out = Result(url: u, br: gbr, size: gsize)
+            out = GDResult(url: u, br: gbr, size: gsize)
         }
         task.resume()
         sem.wait()
         return out
     }
 
-    private func cached(songId: Int, br: Int) -> Result? {
+    private func cached(songId: Int, br: Int) -> GDResult? {
         lock.lock(); defer { lock.unlock() }
         return cache.object(forKey: "\(songId)_\(br)" as NSString)
     }
 
-    private func store(songId: Int, br: Int, result: Result) {
+    private func store(songId: Int, br: Int, result: GDResult) {
         lock.lock(); defer { lock.unlock() }
         cache.setObject(result, forKey: "\(songId)_\(br)" as NSString)
     }

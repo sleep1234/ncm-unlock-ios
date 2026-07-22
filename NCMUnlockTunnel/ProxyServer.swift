@@ -22,7 +22,7 @@ final class ProxyServer {
             .serverChannelOption(ChannelOptions.backlog, value: 256)
             .serverChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
             .childChannelInitializer { [weak self] channel in
-                guard let self = self else { return channel.eventLoop.future() }
+                guard let self = self else { return channel.eventLoop.makeSucceededFuture(()) }
                 return channel.pipeline.addHandler(ProxyHandler(ca: self.ca))
             }
             .childChannelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: 1)
@@ -45,7 +45,7 @@ final class ForwardHandler: ChannelInboundHandler {
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         guard let peer = peer else { return }
         var buf = unwrapInboundIn(data)
-        peer.writeAndFlush(buf, promise: nil)
+        peer.writeAndFlush(NIOAny(buf), promise: nil)
     }
     func channelInactive(context: ChannelHandlerContext) {
         try? peer?.close().flatMap { _ in context.close() }.wait()
@@ -81,19 +81,27 @@ final class ProxyHandler: ChannelInboundHandler {
             // 把客户端后续字节直接写给上游
             if let up = upstream {
                 var b = buf
-                up.writeAndFlush(&b, promise: nil)
+                up.writeAndFlush(NIOAny(b), promise: nil)
             }
         }
     }
 
     // MARK: - 阶段 1：解析 CONNECT
 
-    private func tryReadConnect(context: ChannelHandlerContext) {
-        guard let end = buffer.readableBytesView.firstIndex(of: UInt8(ascii: "\n")) == nil
-                ? nil : buffer.range(of: "\r\n\r\n".data(using: .ascii)!) else {
-            return // 头还没收全
+    private func indexOfCRLFCRLF() -> Int? {
+        let view = buffer.readableBytesView
+        guard view.count >= 4 else { return nil }
+        for i in 0..<(view.count - 3) {
+            if view[i] == 13 && view[i+1] == 10 && view[i+2] == 13 && view[i+3] == 10 {
+                return i
+            }
         }
-        let headerLen = buffer.readableBytesView[..<end].count + 4
+        return nil
+    }
+
+    private func tryReadConnect(context: ChannelHandlerContext) {
+        guard let end = indexOfCRLFCRLF() else { return } // 头还没收全
+        let headerLen = end + 4
         guard let headerData = buffer.readSlice(length: headerLen)?.withUnsafeReadableBytes({ Data($0) }),
               let text = String(data: headerData, encoding: .ascii) else { return }
 
@@ -119,7 +127,7 @@ final class ProxyHandler: ChannelInboundHandler {
     private func respond(context: ChannelHandlerContext, _ s: String) {
         var buf = context.channel.allocator.buffer(capacity: s.utf8.count)
         buf.writeString(s)
-        context.writeAndFlush(buf, promise: nil)
+        context.writeAndFlush(NIOAny(buf), promise: nil)
     }
 
     // MARK: - 阶段 2a：网易云 -> TLS MITM
@@ -160,7 +168,7 @@ final class ProxyHandler: ChannelInboundHandler {
             // 若 CONNECT 段里已夹带 ClientHello，重新喂入管道让其被解密
             if let self = self, self.buffer.readableBytes > 0 {
                 let left = self.buffer
-                self.buffer = self.buffer.allocator.buffer(capacity: 8192)
+                self.buffer = ByteBufferAllocator().buffer(capacity: 8192)
                 context.pipeline.fireChannelRead(NIOAny(left))
             }
         }
@@ -188,8 +196,8 @@ final class ProxyHandler: ChannelInboundHandler {
             // 把 CONNECT 之后可能夹带的早期数据写给上游
             if self.buffer.readableBytes > 0 {
                 var b = self.buffer
-                self.buffer = self.buffer.allocator.buffer(capacity: 8192)
-                up.writeAndFlush(&b, promise: nil)
+                self.buffer = ByteBufferAllocator().buffer(capacity: 8192)
+                up.writeAndFlush(NIOAny(b), promise: nil)
             }
             // 上游回包 -> 写回客户端
             _ = up.closeFuture.map { _ in try? context.close().wait() }
@@ -204,8 +212,8 @@ final class ProxyHandler: ChannelInboundHandler {
 
     private func tryReadHTTP(context: ChannelHandlerContext) {
         // 至少需要请求头
-        guard let endRange = buffer.range(of: "\r\n\r\n".data(using: .ascii)!) else { return }
-        let headerLen = buffer.readableBytesView[..<endRange.lowerBound].count + 4
+        guard let end = indexOfCRLFCRLF() else { return }
+        let headerLen = end + 4
         guard let headerData = buffer.readSlice(length: headerLen)?.withUnsafeReadableBytes({ Data($0) }),
               let text = String(data: headerData, encoding: .utf8) else { return }
 
@@ -282,7 +290,7 @@ final class ProxyHandler: ChannelInboundHandler {
             b.writeBytes(data)
             out.writeBuffer(&b)
         }
-        context.writeAndFlush(out, promise: nil)
+        context.writeAndFlush(NIOAny(out), promise: nil)
         try? context.close().wait()
     }
 

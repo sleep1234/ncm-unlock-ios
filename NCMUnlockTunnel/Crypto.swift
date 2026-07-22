@@ -53,11 +53,12 @@ enum EapiCrypto {
         }
         var out = Data(count: padded.count)
         var outLen = 0
+        let op: CCOperation = encrypt ? CCOperation(kCCEncrypt) : CCOperation(kCCDecrypt)
+        let alg: CCAlgorithm = CCAlgorithm(kCCAlgorithmAES128)
+        let opt: CCOptions = CCOptions(kCCOptionECBMode) | CCOptions(kCCOptionPKCS7Padding)
         let status = padded.withUnsafeBytes { inBuf in
             out.withUnsafeMutableBytes { outBuf in
-                CCCrypt(encrypt ? kCCEncrypt : kCCDecrypt,
-                        kCCAlgorithmAES128,
-                        kCCOptionECBMode | kCCOptionPKCS7Padding,
+                CCCrypt(op, alg, opt,
                         (keyData as NSData).bytes, kCCKeySizeAES128,
                         nil,
                         inBuf.baseAddress, padded.count,

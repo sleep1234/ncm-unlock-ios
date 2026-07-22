@@ -94,8 +94,8 @@ jobs:
           MSG=$'ci: ${{ job.status }} run=${{ github.run_id }}'
           LOG="${{ github.workspace }}/build.log"
           if [ -f "$LOG" ]; then
-            TAIL=$(tail -120 "$LOG")
-            MSG="$MSG"$'\n'"==== BUILD LOG (tail 120) ===="$'\n'"$TAIL"
+            TAIL=$(tail -400 "$LOG")
+            MSG="$MSG"$'\n'"==== BUILD LOG (tail 400) ===="$'\n'"$TAIL"
           else
             MSG="$MSG"$'\n'"==== build.log NOT FOUND ===="
           fi
