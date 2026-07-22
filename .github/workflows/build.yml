@@ -23,7 +23,11 @@ jobs:
         run: brew install xcodegen
 
       - name: Generate Xcode project
-        run: xcodegen generate
+        run: |
+          set -o pipefail
+          xcodegen generate --spec project.yml --project NCMUnlock.xcodeproj 2>&1 | tee build.log
+          echo "--- ls xcodeproj ---"
+          ls -la *.xcodeproj || echo "NO_XCODEPROJ_GENERATED"
 
       # 免签构建：越狱机用 TrollStore 安装（TrollStore 会按内嵌 entitlements 重新签名）。
       # 若需 Apple 官方签名 IPA，请在仓库 Secrets 配置 P12/PROFILE/TEAM_ID 后改用 archive+export 流程。
@@ -39,7 +43,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
-            2>&1 | tee build.log
+            2>&1 | tee -a build.log
 
       - name: Locate built .app
         id: locate
