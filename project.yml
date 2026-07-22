@@ -1,6 +1,9 @@
 name: NCMUnlock
 options:
   bundleIdPrefix: com.ncm.unlock
+  # 跑器是 macos-14 + Xcode 15.4，最新 XcodeGen 默认输出 objectVersion 77(Xcode 16 格式)读不了。
+  # 固定为 Xcode_15_0，生成兼容 Xcode 15.4 的工程。
+  projectFileFormat: Xcode_15_0
   deploymentTarget:
     iOS: "14.0"
   createIntermediateGroups: true
