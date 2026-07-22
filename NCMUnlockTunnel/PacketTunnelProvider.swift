@@ -6,6 +6,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private let proxyPort = 8899
 
     override func startTunnel(options: [String: NSObject]?, completionHandler: @escaping (Error?) -> Void) {
+        NSLog("[ncm] startTunnel called")
         let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "127.0.0.1")
 
         // 给隧道一个私网地址
@@ -37,6 +38,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 NSLog("[ncm] setTunnelNetworkSettings error: \(error)")
                 return completionHandler(error)
             }
+            NSLog("[ncm] setTunnelNetworkSettings ok")
             do {
                 let server = ProxyServer(port: self.proxyPort)
                 try server.start()
