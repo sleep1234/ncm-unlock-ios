@@ -87,10 +87,10 @@ jobs:
           MSG=$'ci: ${{ job.status }} run=${{ github.run_id }}'
           LOG="${{ github.workspace }}/build.log"
           if [ -f "$LOG" ]; then
-            ERR=$(grep -iE "error:|fatal error|BUILD FAILED|Undefined symbols|undefined symbol|no such module|could not build|failed|LD_RUNPATHSEARCH|Swift Compiler Error" "$LOG" | tail -80)
-            if [ -n "$ERR" ]; then
-              MSG="$MSG"$'\n'"==== BUILD LOG (errors) ===="$'\n'"$ERR"
-            fi
+            TAIL=$(tail -120 "$LOG")
+            MSG="$MSG"$'\n'"==== BUILD LOG (tail 120) ===="$'\n'"$TAIL"
+          else
+            MSG="$MSG"$'\n'"==== build.log NOT FOUND ===="
           fi
           git commit --allow-empty -m "$MSG"
           git push -f origin HEAD:refs/heads/ci-status
