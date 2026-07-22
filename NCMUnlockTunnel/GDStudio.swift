@@ -10,16 +10,22 @@ final class GDStudio {
 
     private init() {
         let cfg = URLSessionConfiguration.ephemeral
-        cfg.timeoutInterval = 8
+        cfg.timeoutIntervalForRequest = 8
         cfg.httpAdditionalHeaders = ["User-Agent": "Mozilla/5.0"]
         self.session = URLSession(configuration: cfg)
         cache.countLimit = 2000
     }
 
-    struct GDResult {
+    final class GDResult {
         let url: String
         let br: Int
         let size: Int
+
+        init(url: String, br: Int, size: Int) {
+            self.url = url
+            self.br = br
+            self.size = size
+        }
     }
 
     /// 返回可用播放地址；失败返回 nil。带缓存与 999 兜底。
