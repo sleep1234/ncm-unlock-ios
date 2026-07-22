@@ -29,6 +29,10 @@ jobs:
           # 再叠加 name:NCMUnlock 生成嵌套的 NCMUnlock.xcodeproj/NCMUnlock.xcodeproj。
           # 直接按 project.yml 里的 name 在当前目录生成即可。
           xcodegen generate --spec project.yml 2>&1 | tee build.log
+          echo "--- 兜底：把 objectVersion 77(Xcode16) 降到 56(Xcode15)，确保 Xcode 15.4 能打开 ---"
+          # 即便 project.yml 的 projectFileFormat 因 XcodeGen 版本差异没生效，这里也强制降级。
+          sed -i '' -E 's/(objectVersion = )77;/\156;/' NCMUnlock.xcodeproj/project.pbxproj
+          grep -n "objectVersion" NCMUnlock.xcodeproj/project.pbxproj
           echo "--- ls xcodeproj ---"
           ls -la NCMUnlock.xcodeproj || echo "NO_XCODEPROJ_GENERATED"
 
