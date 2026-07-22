@@ -2,6 +2,9 @@ import Foundation
 import Security
 import NIOSSL
 
+/// sha256WithRSAEncryption OID: 1.2.840.113549.1.1.11
+private let sha256RSA: [UInt] = [1, 2, 840, 113_549, 1, 1, 11]
+
 /// 自签名 CA + 叶子证书生成。
 ///
 /// 说明：`SecCertificateCreateCertificate` 已在现代 SDK 中移除，因此这里手动做

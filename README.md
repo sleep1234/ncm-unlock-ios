@@ -47,31 +47,30 @@ open NCMUnlock.xcodeproj
 # 用你的开发者证书签名两个 target 后跑真机
 ```
 
-## 云编译（GitHub Actions）
+## 云编译（GitHub Actions，免签）
 
-Fork / push 到 GitHub 后，在 Actions 页手动触发 `Build IPA`。
-需要仓库 **Secrets**（Settings → Secrets → Actions）：
+本仓库的 CI（`build.yml`）默认走 **免签构建**：不需要任何付费证书或 Secrets，直接产出
+未签名的 `NCMUnlock.ipa`，供越狱机用 **TrollStore** 安装（TrollStore 会按内嵌的
+`packet-tunnel-provider` 等 entitlements 重新签名）。
 
-| Secret | 说明 |
-| --- | --- |
-| `P12_BASE64` | 你的 iOS 分发证书（.p12）base64 |
-| `P12_PASSWORD` | p12 导出密码 |
-| `APP_PROFILE_BASE64` | 主 App 的 .mobileprovision（bundle id `com.ncm.unlock`）base64 |
-| `TUNNEL_PROFILE_BASE64` | 隧道扩展的 .mobileprovision（`com.ncm.unlock.tunnel`）base64 |
-| `TEAM_ID` | Apple Developer Team ID |
-| `KEYCHAIN_PASSWORD` | 给 CI 用的临时 keychain 密码（随便设） |
+Fork / push 到 GitHub 后，在 Actions 页手动触发 `Build IPA`（或 push 到 `main` / `vpn` 分支自动触发）。
+产物在 Artifacts 里下载：`NCMUnlock-unsigned.ipa`。
 
-> **NetworkExtension 需要付费开发者账号**（免费 Apple ID 没有 `packet-tunnel-provider` 授权）。
-> 若你只有免费账号，需改用「本地 HTTP 代理 App + 手动设置 WiFi 代理」的形态（不含 NetworkExtension）。
+> 若你坚持要 Apple 官方签名的 IPA（非越狱机、企业/Ad-Hoc 分发），再在仓库 Secrets
+> 配置 `P12_BASE64` / `P12_PASSWORD` / `APP_PROFILE_BASE64` / `TUNNEL_PROFILE_BASE64` /
+> `TEAM_ID` / `KEYCHAIN_PASSWORD`，并把 `build.yml` 的 build 步改成 `archive` + `exportArchive`
+>（`method=ad-hoc`）。注意 **NetworkExtension 的 `packet-tunnel-provider` 授权需要付费开发者账号**。
 
-## 真机使用前置（缺一不可）
+## 真机使用前置（越狱机，缺一不可）
 
-1. 安装 IPA（AltStore / TrollStore / 自签）。
-2. **越狱设备**：装并开启「关闭证书锁定」的插件（SSL Kill Switch 2 / Liberty Lite 的 block TLS pinning）。
-   否则网易云会拒掉我们的 MITM 证书（现象同此前日志里的 `interface3 does not trust`）。
-3. iOS「设置 → 通用 → 关于本机 → 证书信任设置」把本 App 生成的 CA **完全信任**打开
-   （本工程会在隧道启动时把 CA 证书 DER 通过 App Group / 日志导出，需手动安装）。
-4. 打开 NCM Unlock App，开启开关；网易云后台划掉重开，播 VIP 歌验证。
+1. 用 **TrollStore** 安装 `NCMUnlock-unsigned.ipa`（TrollStore 会自动按 entitlements 重签）。
+2. 开启**关闭证书锁定**的插件（SSL Kill Switch 2 / Liberty Lite 的 block TLS pinning）。
+   这一步会禁用 TLS 校验，因此本工程运行时自签的 MITM 证书会被直接信任，**无需手动安装 CA**
+   （现象同此前日志里的 `interface3 does not trust` 即由此解决）。
+   - 若你不想装 SSL Kill Switch，则需把本 App 生成的 CA 证书（`CertAuthority.exportCACertificate()`）
+     导出为 .pem/.mobileconfig、安装到系统，并在「设置 → 通用 → 关于本机 → 证书信任设置」完全信任。
+3. 打开 NCM Unlock App，开启开关；网易云后台划掉重开，播 VIP 歌验证。
+4. 看 App 日志 / 设备日志里有没有 `[ncm][ok] ... -> unlocked` 确认生效。
 
 ## 已知待迭代点
 

@@ -3,7 +3,7 @@ name: Build IPA
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ main, vpn ]
 
 jobs:
   build:
@@ -21,68 +21,42 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Decode signing certificate (P12)
+      # 免签构建：越狱机用 TrollStore 安装（TrollStore 会按内嵌 entitlements 重新签名）。
+      # 若需 Apple 官方签名 IPA，请在仓库 Secrets 配置 P12/PROFILE/TEAM_ID 后改用 archive+export 流程。
+      - name: Build (unsigned, for jailbreak / TrollStore)
         run: |
-          echo "${{ secrets.P12_BASE64 }}" | base64 --decode > cert.p12
-
-      - name: Decode provisioning profiles
-        run: |
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          echo "${{ secrets.APP_PROFILE_BASE64 }}" | base64 --decode > "$HOME/Library/MobileDevice/Provisioning Profiles/app.mobileprovision"
-          echo "${{ secrets.TUNNEL_PROFILE_BASE64 }}" | base64 --decode > "$HOME/Library/MobileDevice/Provisioning Profiles/tunnel.mobileprovision"
-
-      - name: Import certificate to keychain
-        run: |
-          security create-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
-          security import cert.p12 -k build.keychain -P "${{ secrets.P12_PASSWORD }}" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
-
-      - name: Archive
-        run: |
-          xcodebuild archive \
+          xcodebuild build \
             -scheme NCMUnlock \
             -configuration Release \
-            -archivePath build/NCMUnlock.xcarchive \
             -destination "generic/platform=iOS" \
-            DEVELOPMENT_TEAM="${{ secrets.TEAM_ID }}" \
-            CODE_SIGN_STYLE=Manual \
-            PROVISIONING_PROFILE_SPECIFIER="ncm-unlock-app" \
-            CODE_SIGN_IDENTITY="iPhone Distribution" \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
             | xcpretty || true
 
-      - name: Export IPA
+      - name: Locate built .app
+        id: locate
         run: |
-          cat > ExportOptions.plist <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>ad-hoc</string>
-            <key>teamID</key>
-            <string>${{ secrets.TEAM_ID }}</string>
-            <key>signingStyle</key>
-            <string>manual</string>
-            <key>provisioningProfiles</key>
-            <dict>
-              <key>com.ncm.unlock</key>
-              <string>ncm-unlock-app</string>
-              <key>com.ncm.unlock.tunnel</key>
-              <string>ncm-unlock-tunnel</string>
-            </dict>
-          </dict>
-          </plist>
-          EOF
-          xcodebuild -exportArchive \
-            -archivePath build/NCMUnlock.xcarchive \
-            -exportOptionsPlist ExportOptions.plist \
-            -exportPath build/ipa \
-            | xcpretty || true
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "NCMUnlock.app" | head -1)
+          if [ -z "$APP" ]; then
+            echo "::error::NCMUnlock.app not found"
+            find build -name "*.app" | head
+            exit 1
+          fi
+          echo "app=$APP" >> "$GITHUB_OUTPUT"
+          echo "found: $APP"
+
+      - name: Package unsigned IPA
+        run: |
+          rm -rf Payload NCMUnlock.ipa
+          mkdir -p Payload
+          cp -R "${{ steps.locate.outputs.app }}" Payload/
+          zip -r NCMUnlock.ipa Payload
+          echo "ipa size: $(stat -f%z NCMUnlock.ipa 2>/dev/null || stat -c%s NCMUnlock.ipa) bytes"
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: NCMUnlock.ipa
-          path: build/ipa/*.ipa
+          name: NCMUnlock-unsigned.ipa
+          path: NCMUnlock.ipa

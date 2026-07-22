@@ -180,7 +180,8 @@ final class ProxyHandler: ChannelInboundHandler {
                 fwd.peer = context.channel
                 return ch.pipeline.addHandler(fwd)
             }
-        bootstrap.connect(host: host, port: port).whenSuccess { [weak self] up in
+        let conn = bootstrap.connect(host: host, port: port)
+        conn.whenSuccess { [weak self] up in
             guard let self = self else { return }
             self.upstream = up
             self.phase = .tunnel
@@ -193,7 +194,7 @@ final class ProxyHandler: ChannelInboundHandler {
             // 上游回包 -> 写回客户端
             _ = up.closeFuture.map { _ in try? context.close().wait() }
         }
-        bootstrap.connect(host: host, port: port).whenFailure { err in
+        conn.whenFailure { err in
             NSLog("[ncm] tunnel connect failed: \(err)")
             try? context.close().wait()
         }

@@ -24,8 +24,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         proxySettings.httpsServer = NEProxyServer(address: sv, port: proxyPort)
         // 排除本机回环，避免代理自身流量回环
         proxySettings.exceptionList = ["127.0.0.1", "localhost"]
-        // 只让网易云等目标走代理（其余直连，减少干扰）
-        proxySettings.matchDomains = [""] // 空串 = 匹配所有域名
+        // 只把网易云相关域名导进代理，其余 App 直连，避免干扰/破坏其他流量
+        proxySettings.matchDomains = ["music.163.com", "netease.com", "163.com"]
         settings.proxySettings = proxySettings
 
         // 不接管真实 IP 层的路由，仅用代理模式
