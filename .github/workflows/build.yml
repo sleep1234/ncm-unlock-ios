@@ -38,7 +38,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
-            | xcpretty || true
+            2>&1 | tee build.log | xcpretty
 
       - name: Locate built .app
         id: locate
@@ -67,7 +67,7 @@ jobs:
           path: NCMUnlock.ipa
 
       # 构建结束（成功或失败）都往仓库 push 一个 ci-status 分支，
-      # 外部可通过 `git ls-remote` 轮询该分支的 sha 变化来判断“是否编译完成”及结果。
+      # 并把错误摘要塞进 commit message，外部可 fetch 后读到具体报错。
       - name: Report status (git-visible)
         if: always()
         env:
@@ -79,5 +79,13 @@ jobs:
           cd ncm-ci
           git config user.email "ci@noreply.local"
           git config user.name "ncm-ci"
-          git commit --allow-empty -m "ci: ${{ job.status }} run=${{ github.run_id }}"
+          MSG=$'ci: ${{ job.status }} run=${{ github.run_id }}'
+          LOG="${{ github.workspace }}/build.log"
+          if [ -f "$LOG" ]; then
+            ERR=$(grep -iE "error:|fatal error|BUILD FAILED|Undefined symbols|undefined symbol|no such module|could not build|failed|LD_RUNPATHSEARCH|Swift Compiler Error" "$LOG" | tail -80)
+            if [ -n "$ERR" ]; then
+              MSG="$MSG"$'\n'"==== BUILD LOG (errors) ===="$'\n'"$ERR"
+            fi
+          fi
+          git commit --allow-empty -m "$MSG"
           git push origin HEAD:refs/heads/ci-status
