@@ -57,6 +57,7 @@ class ViewController: UIViewController {
         proto.serverAddress = "NCM Unlock"
         m.protocolConfiguration = proto
         m.localizedDescription = "NCM Unlock"
+        m.isEnabled = true
         return m
     }
 
@@ -78,18 +79,51 @@ class ViewController: UIViewController {
 
     private func startTunnel() {
         guard let manager = manager else { return }
+        manager.isEnabled = true
         manager.saveToPreferences { [weak self] error in
             if let error = error {
                 self?.showError(error)
                 return
             }
-            // save 后需重新 load 才能拿到正确的 connection 对象
-            NETunnelProviderManager.loadAllFromPreferences { managers, _ in
-                self?.manager = managers?.first
+            self?.loadAndStart()
+        }
+    }
+
+    private func loadAndStart() {
+        NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, error in
+            guard let self = self else { return }
+            if let error = error {
+                self.showError(error)
+                return
+            }
+            guard let m = managers?.first else {
+                let notFound = NSError(
+                    domain: "ncm",
+                    code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: "未找到已保存的 VPN 配置，请重试"]
+                )
+                self.showError(notFound)
+                return
+            }
+            self.manager = m
+            if m.isEnabled {
                 do {
-                    try self?.manager?.connection.startVPNTunnel()
+                    try m.connection.startVPNTunnel()
                 } catch {
-                    self?.showError(error)
+                    self.showError(error)
+                }
+            } else {
+                m.isEnabled = true
+                m.saveToPreferences { error in
+                    if let error = error {
+                        self.showError(error)
+                        return
+                    }
+                    do {
+                        try m.connection.startVPNTunnel()
+                    } catch {
+                        self.showError(error)
+                    }
                 }
             }
         }
