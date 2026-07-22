@@ -7,12 +7,14 @@ class ViewController: UIViewController {
     private let statusLabel = UILabel()
     private let hintLabel = UILabel()
     private var manager: NETunnelProviderManager?
+    private var statusObserver: NSObjectProtocol?
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
         title = "NCM Unlock"
         setupUI()
+        registerStatusObserver()
         loadManager()
     }
 
@@ -46,6 +48,7 @@ class ViewController: UIViewController {
     private func loadManager() {
         NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, _ in
             self?.manager = managers?.first ?? self?.makeManager()
+            self?.registerStatusObserver()
             self?.refreshStatus()
         }
     }
@@ -62,10 +65,49 @@ class ViewController: UIViewController {
     }
 
     private func refreshStatus() {
-        let connected = (manager?.connection.status == .connected)
+        guard let conn = manager?.connection else {
+            DispatchQueue.main.async { self.statusLabel.text = "状态：未连接" }
+            return
+        }
+        let status = conn.status
         DispatchQueue.main.async {
-            self.toggle.isOn = connected
-            self.statusLabel.text = connected ? "状态：已连接" : "状态：未连接"
+            switch status {
+            case .connected:
+                self.toggle.isOn = true
+                self.statusLabel.text = "状态：已连接"
+            case .connecting:
+                self.toggle.isOn = true
+                self.statusLabel.text = "状态：连接中…"
+            case .disconnecting:
+                self.statusLabel.text = "状态：断开中…"
+            case .disconnected:
+                self.toggle.isOn = false
+                if let err = conn.error {
+                    self.statusLabel.text = "状态：未连接（\(err.localizedDescription)）"
+                } else {
+                    self.statusLabel.text = "状态：未连接"
+                }
+            case .invalid:
+                self.toggle.isOn = false
+                self.statusLabel.text = "状态：未连接"
+            @unknown default:
+                self.statusLabel.text = "状态：未知"
+            }
+        }
+    }
+
+    /// 注册 NEVPNStatusDidChange 监听，确保 UI 实时反映隧道连接状态。
+    /// 先移除旧 observer 再添加，避免重复注册；object 使用当前 manager 的 connection。
+    private func registerStatusObserver() {
+        if let old = statusObserver {
+            NotificationCenter.default.removeObserver(old)
+        }
+        statusObserver = NotificationCenter.default.addObserver(
+            forName: .NEVPNStatusDidChange,
+            object: manager?.connection,
+            queue: .main
+        ) { [weak self] _ in
+            self?.refreshStatus()
         }
     }
 
@@ -106,6 +148,8 @@ class ViewController: UIViewController {
                 return
             }
             self.manager = m
+            self.registerStatusObserver()
+            self.refreshStatus()
             if m.isEnabled {
                 do {
                     try m.connection.startVPNTunnel()
@@ -138,6 +182,12 @@ class ViewController: UIViewController {
             let alert = UIAlertController(title: "错误", message: error.localizedDescription, preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "好", style: .default))
             self.present(alert, animated: true)
+        }
+    }
+
+    deinit {
+        if let o = statusObserver {
+            NotificationCenter.default.removeObserver(o)
         }
     }
 }
